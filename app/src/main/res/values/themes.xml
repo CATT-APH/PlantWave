@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme. -->
+    <style name="Theme.PlantWave" parent="Theme.AppCompat.DayNight.DarkActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+    </style>
+</resources>

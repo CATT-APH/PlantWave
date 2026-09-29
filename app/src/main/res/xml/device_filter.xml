@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CH340 (common Arduino clone) -->
+    <usb-device vendor-id="6790" product-id="29987" />
+    <!-- FTDI -->
+    <usb-device vendor-id="1027" product-id="24577" />
+    <!-- Official Arduino (ATmega16u2 native USB-CDC), any product id -->
+    <usb-device vendor-id="9025" />
+</resources>

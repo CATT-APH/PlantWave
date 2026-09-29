@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+USB access on Android is granted at runtime via UsbManager.requestPermission()
++ a PendingIntent, not via a manifest <uses-permission> entry. There is no
+such thing as android.permission.USB_PERMISSION or USB_DEVICES_PERMISSION on
+the platform, so they're intentionally not declared here.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="true" />
+
+    <!--
+    android:screenOrientation="landscape" is needed for Monarch Development.
+    android:name=".PlantWaveApplication" is crucial for making commands work.
+    If that is not added the commands will not work.
+    -->
+    <application
+        android:name=".PlantWaveApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PlantWave"
+        tools:targetApi="34"
+        android:screenOrientation="landscape">
+
+        <activity
+            android:name=".activities.PlantWaveActivity"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+        </activity>
+
+        <activity
+            android:name=".activities.GraphActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".activities.LoadingActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <activity
+            android:name=".activities.LiveGraphActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <provider
+            android:name="XmlResource"
+            android:authorities="org.aph.plantwave.XmlResource"
+            android:grantUriPermissions="true"
+            android:exported="true">
+        </provider>
+    </application>
+</manifest>

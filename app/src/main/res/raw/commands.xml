@@ -5,10 +5,18 @@ onKeyDown -- confirmed via the vendor's Command Summary doc + a working
 reference project (MonarchBlocks) that none of these keycodes are
 auto-forwarded; each needs its own entry here, or it never arrives.
 
-- Zoom In/Out: real chassis buttons -> KEYCODE_ZOOM_IN (168) / KEYCODE_ZOOM_OUT (169).
 - Enter: NOT a chassis button -- it's Dot 8 on the braille keyboard.
   Confirmed on-device via adb logcat that omitting this entry means
-  KEYCODE_ENTER (66) never reaches onKeyDown at all.
+  KEYCODE_ENTER (66) never reaches onKeyDown at all. This is pause's real
+  working trigger (LiveGraphActivity.togglePause()).
+
+Zoom In/Out entries were REMOVED 2026-10-02: they're permanently claimed
+system-wide by the device's screen reader for its own braille
+line-spacing feature, in every app, and no commands.xml mapping --
+including the ones that used to be here -- can override that. The
+Live/Overview toggle they used to drive is now bound to D-pad Up/Down
+instead (see LiveGraphActivity's own doc comment). See
+monarch-sdk-known-issues memory for the full investigation.
 
 D-pad center and Space are deliberately NOT mapped: the vendor's Command
 Summary never lists a D-pad center/select function (confirmed: this
@@ -23,12 +31,6 @@ PlantWaveApplication hands this file to KeySoft on launch.
     <application package="org.aph.plantwave">
         <context viewIdResourceName="SelfBraillingWidget">
             <action name="substitute">
-                <command commandId="action_zoom_in" finishComposing="true" param="168" string="context_menu_zoom_in">
-                    <key>ZoomIn</key>
-                </command>
-                <command commandId="action_zoom_out" convertToCharacter="true" finishComposing="true" param="169" savePanning="true" string="context_menu_zoom_out">
-                    <key>ZoomOut</key>
-                </command>
                 <command commandId="enter" param="66">
                     <key>Dots8</key>
                 </command>

@@ -6,14 +6,17 @@ import kotlin.math.abs
  * Y-axis (left, col 6) and X-axis (bottom, row 33) spines, the two static
  * axis-name labels, and 3 tick marks on the X axis only (oldest/mid/newest
  * visible time) -- Y-axis ticks were removed as redundant/cluttered once
- * the axis-name label sat right next to them. Plot interior is rows 1-32,
- * cols 7-95: the full width, with nothing overlaid on it.
+ * the axis-name label sat right next to them (there's also no fixed mV
+ * scale to label since LiveGraphRenderer auto-ranges). Plot interior is
+ * rows 1-32, cols 7-95: the full width, with nothing overlaid on it.
  *
- * The strip below the X axis (rows 35-37) is the info row: the live mV
- * reading (drawn by LiveGraphActivity via BrailleGlyphs at READING_COL/ROW)
- * sits where the "time" label originally was, and "time" moved right to
- * make room. An earlier bottom-right sidebar box was dropped -- it clipped
- * the newest ~12s of low readings to frame a number that fits in 14 pins.
+ * The strip below the X axis (rows 35-38) is the info row: the live mV
+ * reading (drawn by LiveGraphActivity via BrailleGlyphs at READING_COL/ROW
+ * = col 42/row 35) sits where the "time" label originally was, and "time"
+ * ended up at row 36/col 3 after a couple of rounds of nudging (see the
+ * inline comment by X_AXIS_LABEL_COL/ROW below for the exact history). An
+ * earlier bottom-right sidebar box was dropped -- it clipped the newest
+ * ~12s of low readings to frame a number that fits in 14 pins.
  *
  * X-axis ticks are single-pin bumps, silent by default -- LiveGraphActivity
  * speaks a tapped tick's value via announceText. The two axis-name labels
@@ -41,14 +44,15 @@ object AxisRenderer {
 
     // Axis-name labels, transcribed exactly (verbatim, not redesigned) from the
     // user's sketch -- the sparse dot clusters at rows 14-16 (left of the Y
-    // spine) and rows 35-37 (below the X spine) were the axis names all along,
+    // spine) and rows 36-38 (below the X spine) were the axis names all along,
     // not tick-mark placeholders. Both regions are outside the plot's row/col
-    // range (cols 0-4 is left of PLOT_COL_START; rows 35-37 is below
+    // range (cols 0-4 is left of PLOT_COL_START; rows 36-38 is below
     // PLOT_ROW_END), so the line never draws there -- no overlap to worry about.
-    // "time" originally moved right (col 83) to free its sketched col 42 slot
-    // for the live reading; moved back to the left (col 0) per later request --
-    // reading stays at col 42, so the two no longer sit adjacent, just both on
-    // the info row.
+    // "time"'s column moved three times: right to col 83 (to free its
+    // sketched col 42 slot for the live reading), then back left to col 0,
+    // then nudged to its current col 3/row 36 per a later "1 row down, 3
+    // columns right" request -- reading stays at col 42, so the two don't
+    // sit adjacent, just both on the info row.
     private const val Y_AXIS_LABEL_COL = 0
     private const val Y_AXIS_LABEL_ROW = 14
     private val Y_AXIS_LABEL: Array<ByteArray> = arrayOf(

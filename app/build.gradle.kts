@@ -44,8 +44,18 @@ android {
 }
 
 dependencies {
-    implementation("com.humanware:KeySoftSDK:latest.release") //Needed for Monarch Development
-    implementation("com.google.dagger:hilt-android:2.45") //Needed for Monarch Development
+    // Pinned to an exact version (was "latest.release") -- that dynamic
+    // version forces Gradle to re-check GitLab's package registry on every
+    // sync, and the deploy token authenticating that registry expired
+    // 2026-10-01, breaking Android Studio sync (401 Unauthorized) even
+    // though the artifact itself is already cached locally. Pinning avoids
+    // needing to contact GitLab for this dependency at all. Revert to
+    // latest.release once a fresh token is available, if picking up newer
+    // SDK releases becomes necessary. Same fix applied to Stocks.
+    implementation("com.humanware:KeySoftSDK:0.1.136") //Needed for Monarch Development
+    // hilt-android removed -- was never actually wired up (no Hilt Gradle
+    // plugin applied, @HiltAndroidApp was inert, zero @Inject/@Module usage
+    // anywhere in the app). See PlantWaveApplication.kt.
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

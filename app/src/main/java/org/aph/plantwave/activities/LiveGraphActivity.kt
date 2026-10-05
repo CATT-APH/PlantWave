@@ -17,14 +17,32 @@ import org.aph.plantwave.LiveSession
 import org.aph.plantwave.graphics.AxisRenderer
 import org.aph.plantwave.graphics.BrailleGlyphs
 import org.aph.plantwave.graphics.LiveGraphRenderer
+import org.aph.plantwave.graphics.LivePage
 import kotlin.math.roundToInt
 
 /**
- * Live-streaming graph screen. Renders LiveSession.readingsMv as it grows
- * (a session runs until the user backs out, not until a fixed duration
- * elapses) and speaks the value at a double-tapped point via the SDK's
- * built-in announceText -- no Translator/braille text service, so only
- * SelfBraillingManager is bound, one fewer AIDL service to manage.
+ * Live-streaming graph screen. Speaks the value at a double-tapped point via
+ * the SDK's built-in announceText -- no Translator/braille text service, so
+ * only SelfBraillingManager is bound, one fewer AIDL service to manage.
+ *
+ * Live view (overviewMode=false) renders in fixed-length pages (see
+ * LivePage): a page is the next PAGE_CAPACITY_SAMPLES (= PLOT_WIDTH)
+ * incoming samples, one per column, never a sliding window. Once a page's
+ * columns are drawn they never get remapped to a different value or row --
+ * only the newest column changes per tick, which keeps physical pin churn
+ * low on the real device (a sliding window, by contrast, can reshape nearly
+ * every column every tick even though only one new sample arrived -- this
+ * was reported as visible glitching and an untrackable line on real
+ * hardware). When a page fills, it rolls over to a fresh one seeded from the
+ * previous page's own min/max, via catchUpPage()/rolloverPage() below.
+ * Overview mode is untouched by this -- it still renders the whole session
+ * history from LiveSession.readingsMv directly, exactly as before.
+ *
+ * No screen space is spent showing the running min/max -- instead, a
+ * genuine new session high/low (LivePage.append() returning NEW_MAX/
+ * NEW_MIN) is announced aloud immediately via announceText, so a real spike
+ * is audible the moment it happens without sacrificing any of the tactile
+ * graph to a stats readout.
  *
  * Double-tap, not single-tap: the SDK's Known Issues confirm single-tap is
  * blocked by the screen reader, so every "speak on tap" interaction here
@@ -37,13 +55,23 @@ import kotlin.math.roundToInt
  * box was dropped: it clipped the newest ~12s of low readings to frame a
  * number that fits in 14 pins.)
  *
- * Two view modes, toggled by the physical Zoom keys: LIVE (default -- a
- * scrolling strip chart, one sample per column, unchanged by the overview
- * work) and OVERVIEW (the whole session downsampled to fit, repainted only
- * every OVERVIEW_REFRESH_SAMPLES new samples rather than every 500ms, so
- * the shape doesn't keep resquishing under the reader's finger -- a
- * deliberate slower cadence, confirmed preferred over repainting every
- * sample despite reading as "paused" on first impression).
+ * Two view modes, toggled by D-pad Up (live)/D-pad Down (overview): LIVE
+ * (default -- the paged strip chart described above) and OVERVIEW (the
+ * whole session downsampled to fit, repainted only every
+ * OVERVIEW_REFRESH_SAMPLES new samples rather than every 500ms, so the
+ * shape doesn't keep resquishing under the reader's finger -- a deliberate
+ * slower cadence, confirmed preferred over repainting every sample despite
+ * reading as "paused" on first impression).
+ *
+ * Originally bound to the physical Zoom keys -- moved to D-pad Up/Down
+ * 2026-10-02 after Stocks' far more rigorous key-testing established that
+ * Zoom In/Out are permanently claimed system-wide by the device's screen
+ * reader for braille line spacing, in every app, with no way for any
+ * commands.xml mapping to override it. What looked like "zoom works" here
+ * earlier was almost certainly that same system magnification effect
+ * reshaping the graph's appearance, not this toggle actually firing -- see
+ * monarch-sdk-known-issues memory. D-pad Up/Down are the one input
+ * confirmed reliable on this hardware across both Monarch apps.
  *
  * Enter (Dot 8) toggles pause: a view-layer freeze. LiveSession keeps
  * accumulating regardless. A double-tap while paused speaks the value as it
@@ -79,6 +107,9 @@ class LiveGraphActivity : AppCompatActivity() {
     private var overviewMode = false
     private var lastOverviewPaintCount = 0
 
+    private var currentPage = LivePage(PAGE_CAPACITY_SAMPLES)
+    private var consumedSessionCount = 0
+
     private var lastKeyActionMs = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,7 +143,11 @@ class LiveGraphActivity : AppCompatActivity() {
 
         LiveSession.readingsMv.observe(this) { readings ->
             if (isPaused) return@observe
-            if (overviewMode && readings.size - lastOverviewPaintCount < OVERVIEW_REFRESH_SAMPLES) return@observe
+            if (overviewMode) {
+                if (readings.size - lastOverviewPaintCount < OVERVIEW_REFRESH_SAMPLES) return@observe
+            } else {
+                catchUpPage(readings)
+            }
             paint()
         }
 
@@ -173,8 +208,11 @@ class LiveGraphActivity : AppCompatActivity() {
         Log.d(TAG, "onKeyDown keyCode=$keyCode repeat=${event?.repeatCount} aidlBound=${manager.aidlBound} firstRenderDone=$firstRenderDone")
         when (keyCode) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE -> debounced { togglePause() }
-            KeyEvent.KEYCODE_ZOOM_OUT -> debounced { setOverview(true) }
-            KeyEvent.KEYCODE_ZOOM_IN -> debounced { setOverview(false) }
+            // D-pad Up/Down, not Zoom -- Zoom is permanently claimed system-wide
+            // for braille line spacing and never reaches onKeyDown (confirmed via
+            // Stocks' key testing). D-pad Up/Down are proven reliable instead.
+            KeyEvent.KEYCODE_DPAD_UP -> debounced { setOverview(false) }
+            KeyEvent.KEYCODE_DPAD_DOWN -> debounced { setOverview(true) }
             else -> return super.onKeyDown(keyCode, event)
         }
         return true
@@ -182,7 +220,7 @@ class LiveGraphActivity : AppCompatActivity() {
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean = when (keyCode) {
         KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE,
-        KeyEvent.KEYCODE_ZOOM_IN, KeyEvent.KEYCODE_ZOOM_OUT -> true
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> true
         else -> super.onKeyUp(keyCode, event)
     }
 
@@ -208,6 +246,7 @@ class LiveGraphActivity : AppCompatActivity() {
             if (firstRenderDone) manager.announceText("Paused")
         } else {
             pausedReadings = null
+            if (!overviewMode) catchUpPage(LiveSession.readingsMv.value ?: emptyList())
             if (firstRenderDone) manager.announceText("Resumed")
         }
         // Repaint on BOTH transitions -- pausing needs this too, to actually
@@ -223,6 +262,9 @@ class LiveGraphActivity : AppCompatActivity() {
         }
         overviewMode = enabled
         Log.d(TAG, "setOverview -> overviewMode=$overviewMode")
+        // Paused freezes the page clock too (same as the main observer) --
+        // don't let switching views while paused sneak in a catch-up.
+        if (!enabled && !isPaused) catchUpPage(LiveSession.readingsMv.value ?: emptyList())
         if (firstRenderDone) manager.announceText(if (enabled) "Overview" else "Live view")
         paint()
     }
@@ -230,13 +272,55 @@ class LiveGraphActivity : AppCompatActivity() {
     /** The frozen snapshot while paused, or the live list otherwise. */
     private fun currentReadings(): List<Double> = pausedReadings ?: (LiveSession.readingsMv.value ?: emptyList())
 
+    /**
+     * Drains whatever's new in [readings] (vs. consumedSessionCount) into
+     * currentPage, rolling pages over as needed, and announces the most
+     * extreme new high/low seen in this batch (usually just one sample;
+     * more after a pause/overview gap, batched into a single announcement
+     * each rather than one per sample).
+     */
+    private fun catchUpPage(readings: List<Double>) {
+        if (readings.size < consumedSessionCount) {
+            // LiveSession.reset() happened (a fresh START) -- start over.
+            consumedSessionCount = 0
+            currentPage = LivePage(PAGE_CAPACITY_SAMPLES)
+        }
+
+        var newHigh: Double? = null
+        var newLow: Double? = null
+        for (i in consumedSessionCount until readings.size) {
+            if (currentPage.isFull) rolloverPage()
+            when (currentPage.append(readings[i])) {
+                LivePage.BoundsChange.NEW_MAX -> newHigh = readings[i]
+                LivePage.BoundsChange.NEW_MIN -> newLow = readings[i]
+                LivePage.BoundsChange.NONE -> Unit
+            }
+        }
+        consumedSessionCount = readings.size
+
+        if (firstRenderDone) {
+            newHigh?.let { Log.d(TAG, "new high ${it.roundToInt()}mV"); manager.announceText("New high, ${it.roundToInt()} millivolts") }
+            newLow?.let { Log.d(TAG, "new low ${it.roundToInt()}mV"); manager.announceText("New low, ${it.roundToInt()} millivolts") }
+        }
+    }
+
+    private fun rolloverPage() {
+        val seed = currentPage.rawBounds()
+        Log.d(TAG, "page full -> rollover, seed=$seed")
+        currentPage = LivePage(PAGE_CAPACITY_SAMPLES, seed?.first, seed?.second)
+    }
+
     private fun samplesPerColumn(readings: List<Double>): Int =
         if (overviewMode) LiveGraphRenderer.samplesPerColumnToFit(readings.size, AxisRenderer.PLOT_WIDTH) else 1
 
+    /** Live reads the current page (page-relative time); Overview reads the whole session (session-relative time), unchanged. */
+    private fun readingsForDisplay(): List<Double> = if (overviewMode) currentReadings() else currentPage.readings()
+    private fun spcForDisplay(readings: List<Double>): Int = if (overviewMode) samplesPerColumn(readings) else 1
+
     private fun speakValueAt(plotColumn: Int) {
         if (!firstRenderDone) return
-        val readings = currentReadings()
-        val spc = samplesPerColumn(readings)
+        val readings = readingsForDisplay()
+        val spc = spcForDisplay(readings)
         val value = LiveGraphRenderer.columnValues(readings, AxisRenderer.PLOT_WIDTH, spc).getOrNull(plotColumn) ?: return
         val time = LiveGraphRenderer.timeSecondsForColumn(readings.size, AxisRenderer.PLOT_WIDTH, plotColumn, spc)
         val suffix = if (spc > 1) ", average of $spc samples" else ""
@@ -245,9 +329,9 @@ class LiveGraphActivity : AppCompatActivity() {
 
     private fun speakXAxisTick(tapColumn: Int) {
         if (!firstRenderDone) return
-        val readings = currentReadings()
+        val readings = readingsForDisplay()
         val tickColumn = AxisRenderer.nearestXTickColumn(tapColumn) - AxisRenderer.PLOT_COL_START
-        val time = LiveGraphRenderer.timeSecondsForColumn(readings.size, AxisRenderer.PLOT_WIDTH, tickColumn, samplesPerColumn(readings))
+        val time = LiveGraphRenderer.timeSecondsForColumn(readings.size, AxisRenderer.PLOT_WIDTH, tickColumn, spcForDisplay(readings))
         manager.announceText(LiveGraphRenderer.formatElapsedTime(time))
     }
 
@@ -257,14 +341,15 @@ class LiveGraphActivity : AppCompatActivity() {
 
     private fun paint() {
         if (!firstRenderDone) return
-        val readings = currentReadings()
-        val spc = samplesPerColumn(readings)
+        val readings = readingsForDisplay()
+        val spc = spcForDisplay(readings)
         if (overviewMode) lastOverviewPaintCount = readings.size
+        val bounds = if (overviewMode) null else currentPage.paddedBounds()
 
         clearScreen()
         val axisPixels = AxisRenderer.render(screenDimensions.width, screenDimensions.height)
         brailleScreen.include(DotsMatrix(axisPixels), 0, 0)
-        val linePixels = LiveGraphRenderer.render(readings, AxisRenderer.PLOT_WIDTH, AxisRenderer.PLOT_HEIGHT, spc)
+        val linePixels = LiveGraphRenderer.render(readings, AxisRenderer.PLOT_WIDTH, AxisRenderer.PLOT_HEIGHT, spc, bounds)
         brailleScreen.include(DotsMatrix(linePixels), AxisRenderer.PLOT_COL_START, AxisRenderer.PLOT_ROW_START)
         // Live reading as braille numerals on the strip below the X axis --
         // outside the plot, so it never hides data. Tight buffer, safe to blit.
@@ -287,5 +372,7 @@ class LiveGraphActivity : AppCompatActivity() {
         private const val TAG = "PlantWave"
         private const val KEY_DEBOUNCE_MS = 400L
         private const val OVERVIEW_REFRESH_SAMPLES = 10
+        /** Must not exceed AxisRenderer.PLOT_WIDTH, or columns would start sliding again within a page. */
+        private const val PAGE_CAPACITY_SAMPLES = AxisRenderer.PLOT_WIDTH
     }
 }

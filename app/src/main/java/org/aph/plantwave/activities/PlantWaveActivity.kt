@@ -8,6 +8,8 @@ import android.content.IntentFilter
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import android.os.SystemClock
+import android.util.Log
 import android.util.Size
 import android.view.KeyEvent
 import androidx.appcompat.app.AppCompatActivity
@@ -23,6 +25,7 @@ import com.humanware.keysoftsdk.selfbrailling.widget.SelfBraillingWidget
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.aph.plantwave.LiveSession
+import org.aph.plantwave.graphics.ADCConverter
 import org.aph.plantwave.graphics.PlantWaveRenderer
 
 /**
@@ -64,6 +67,7 @@ class PlantWaveActivity : AppCompatActivity() {
     private var firstRenderDone = false
 
     private var state = ReadState.WAITING
+    private var lastKeyActionMs = 0L
     private var currentDriver: UsbSerialDriver? = null
     private var serialPort: UsbSerialPort? = null
     private var ioManager: SerialInputOutputManager? = null
@@ -106,6 +110,7 @@ class PlantWaveActivity : AppCompatActivity() {
 
     private val serialListener = object : SerialInputOutputManager.Listener {
         override fun onNewData(data: ByteArray) {
+            Log.d(TAG, "onNewData ${data.size} bytes, state=$state, raw=${String(data, Charsets.US_ASCII)}")
             runOnUiThread { handleIncomingBytes(data) }
         }
 
@@ -207,13 +212,35 @@ class PlantWaveActivity : AppCompatActivity() {
      * external-keyboard fallback -- this device's D-pad has no center
      * position at all (confirmed against the vendor's own Command Summary),
      * and Space isn't mapped in commands.xml on purpose (see that file).
+     *
+     * Debounced the same way as LiveGraphActivity: physical keys on this
+     * hardware arrive on finger-lift with both onKeyDown and onKeyUp firing
+     * together, and can double-fire. attemptStart()'s own CONNECTED-state
+     * guard happened to make a duplicate fire harmless here, but that was
+     * incidental, not the same explicit proven-necessary pattern used one
+     * file over on the same hardware -- made consistent since this is
+     * exactly the connection-start path tomorrow's real sensor test
+     * exercises.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
-            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE -> attemptStart()
+            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE -> debounced { attemptStart() }
             else -> return super.onKeyDown(keyCode, event)
         }
         return true
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE -> true
+        else -> super.onKeyUp(keyCode, event)
+    }
+
+    /** One physical press can surface as more than one key event on this device; only the first within the window counts (same pattern as LiveGraphActivity). */
+    private fun debounced(action: () -> Unit) {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastKeyActionMs < KEY_DEBOUNCE_MS) return
+        lastKeyActionMs = now
+        action()
     }
 
     /** Looks for a supported serial device and requests permission or opens it. */
@@ -315,8 +342,13 @@ class PlantWaveActivity : AppCompatActivity() {
             lineAccumulator.delete(0, newlineIndex + 1)
 
             val value = line.toIntOrNull()
-            if (value != null) {
-                LiveSession.addReading(value)
+            when {
+                value == null -> Log.d(TAG, "unparsed line: \"$line\"")
+                value !in ADC_RANGE -> Log.d(TAG, "out-of-range adc=$value from line \"$line\", discarding")
+                else -> {
+                    Log.d(TAG, "reading adc=$value mv=${ADCConverter.toMillivolts(value)}")
+                    LiveSession.addReading(value)
+                }
             }
 
             newlineIndex = lineAccumulator.indexOf("\n")
@@ -339,8 +371,14 @@ class PlantWaveActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "PlantWaveSerial"
+        /** The Arduino's ADC is 10-bit; a line parsing outside this range can only be
+         * line-noise corruption (e.g. two readings glued together by a dropped '\n'), not a
+         * real sample -- discard it rather than feeding a false spike into LiveSession. */
+        private val ADC_RANGE = 0..1023
         private const val ACTION_USB_PERMISSION = "org.aph.plantwave.USB_PERMISSION"
         private const val BAUD_RATE = 9600
         private const val WRITE_TIMEOUT_MS = 2000
+        private const val KEY_DEBOUNCE_MS = 400L
     }
 }

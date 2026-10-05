@@ -6,7 +6,8 @@ import kotlin.math.roundToInt
 import org.aph.plantwave.LiveSession
 
 /**
- * Rasterizes the live millivolt stream against a fixed 1700-2400 mV range.
+ * Rasterizes the live millivolt stream, auto-ranging the vertical scale to
+ * whatever's actually on screen rather than a fixed assumed band.
  *
  * At [samplesPerColumn] = 1 (live view) this is a scrolling strip chart: the
  * most recent up to [width] readings, one per column, oldest falling off
@@ -14,13 +15,22 @@ import org.aph.plantwave.LiveSession
  * rescaling as a session grows. At samplesPerColumn > 1 (overview) each
  * column is the average of a chunk of consecutive readings, so a whole
  * session fits in [width] columns; see [samplesPerColumnToFit].
+ *
+ * The Y scale used to be a fixed 1700-2400 mV window. That assumed a
+ * specific voltage-divider output range; in practice the sensor circuit's
+ * actual output depends on the resistor/wiring in use (observed ~4200 mV
+ * with the current 1M-ohm resistor) and keeps shifting as the hardware is
+ * tuned, so a fixed window just pinned real readings at the top or bottom
+ * of the screen instead of showing their variation. Scaling to the visible
+ * window's own min/max (see [scaleBounds]) stays correct regardless of
+ * what voltage range the circuit happens to produce.
  */
 object LiveGraphRenderer {
     private const val PIN_UP: Byte = 1
 
-    // Not private: AxisRenderer's Y-axis labels describe these same fixed scale bounds.
-    const val MIN_MV = 1700.0
-    const val MAX_MV = 2400.0
+    /** Minimum vertical span to scale against, in mV -- keeps a near-flat
+     * signal from being blown up into visual noise by tiny fluctuation. */
+    private const val MIN_SPAN_MV = 50.0
 
     fun windowStartIndex(totalCount: Int, width: Int, samplesPerColumn: Int = 1): Int =
         (totalCount - width * samplesPerColumn).coerceAtLeast(0)
@@ -47,11 +57,24 @@ object LiveGraphRenderer {
         return values
     }
 
-    fun render(readingsMv: List<Double>, width: Int, height: Int, samplesPerColumn: Int = 1): Array<ByteArray> {
+    /**
+     * [bounds] lets a caller (LiveGraphActivity's paged Live view) freeze the
+     * Y scale across repaints instead of recomputing it from the window every
+     * time -- otherwise already-drawn columns would keep getting remapped to
+     * slightly different rows as new samples arrive, even when the window
+     * itself isn't sliding. Overview mode passes null and keeps today's
+     * recompute-every-time behavior, since it doesn't track a running bound.
+     */
+    fun render(
+        readingsMv: List<Double>, width: Int, height: Int, samplesPerColumn: Int = 1,
+        bounds: Pair<Double, Double>? = null
+    ): Array<ByteArray> {
         val buffer = Array(height) { ByteArray(width) }
         if (readingsMv.isEmpty()) return buffer
 
-        val points = columnValues(readingsMv, width, samplesPerColumn).mapIndexed { i, mv -> i to scaleY(mv, height) }
+        val values = columnValues(readingsMv, width, samplesPerColumn)
+        val (minMv, maxMv) = bounds ?: scaleBounds(values)
+        val points = values.mapIndexed { i, mv -> i to scaleY(mv, height, minMv, maxMv) }
 
         if (points.size == 1) {
             val (x, y) = points[0]
@@ -89,12 +112,20 @@ object LiveGraphRenderer {
         else -> "%.1f hours".format(totalSeconds / 3600)
     }
 
-    /** Row a given mV value lands on for a plot of this height -- the same scale the line itself uses. */
-    fun rowForMv(mv: Double, height: Int): Int = scaleY(mv, height)
+    /** The visible window's own min/max, padded out to [MIN_SPAN_MV] if narrower than that. */
+    private fun scaleBounds(values: List<Double>): Pair<Double, Double> = paddedBounds(values.min(), values.max())
 
-    /** Fixed-range scale into [0, height-1]. Higher mV -> higher on screen (lower row index). */
-    private fun scaleY(mv: Double, height: Int): Int {
-        val normalized = (mv.coerceIn(MIN_MV, MAX_MV) - MIN_MV) / (MAX_MV - MIN_MV)
+    /** Pads an externally-tracked min/max (e.g. LivePage's running bounds) out to [MIN_SPAN_MV] if narrower. */
+    fun paddedBounds(minMv: Double, maxMv: Double): Pair<Double, Double> {
+        val span = maxMv - minMv
+        if (span >= MIN_SPAN_MV) return minMv to maxMv
+        val pad = (MIN_SPAN_MV - span) / 2.0
+        return (minMv - pad) to (maxMv + pad)
+    }
+
+    /** Scale into [0, height-1] against [minMv]/[maxMv]. Higher mV -> higher on screen (lower row index). */
+    private fun scaleY(mv: Double, height: Int, minMv: Double, maxMv: Double): Int {
+        val normalized = (mv.coerceIn(minMv, maxMv) - minMv) / (maxMv - minMv)
         return ((height - 1) * (1.0 - normalized)).roundToInt().coerceIn(0, height - 1)
     }
 

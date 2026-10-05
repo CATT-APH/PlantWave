@@ -14,6 +14,12 @@ the platform, so they're intentionally not declared here.
 
     <!--
     android:screenOrientation="landscape" is needed for Monarch Development.
+    It's an <activity>-level attribute, so it has to be set on EACH activity
+    individually: Android silently ignores it if placed on <application>,
+    which this file used to do, so PlantWaveActivity (the launcher) was
+    consequently not actually locked to landscape; fixed by adding it
+    directly to each activity below (same bug, same fix, independently
+    found in Stocks' manifest the same night).
     android:name=".PlantWaveApplication" is crucial for making commands work.
     If that is not added the commands will not work.
     -->
@@ -27,13 +33,13 @@ the platform, so they're intentionally not declared here.
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.PlantWave"
-        tools:targetApi="34"
-        android:screenOrientation="landscape">
+        tools:targetApi="34">
 
         <activity
             android:name=".activities.PlantWaveActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:screenOrientation="landscape">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -45,16 +51,6 @@ the platform, so they're intentionally not declared here.
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
-
-        <activity
-            android:name=".activities.GraphActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
-
-        <activity
-            android:name=".activities.LoadingActivity"
-            android:exported="false"
-            android:screenOrientation="landscape" />
 
         <activity
             android:name=".activities.LiveGraphActivity"

@@ -34,8 +34,11 @@ object BrailleGlyphs {
     fun widthOf(text: String): Int =
         if (text.isEmpty()) 0 else text.length * (CELL_WIDTH + CELL_GAP) - CELL_GAP
 
-    /** UEB number: numeric indicator followed by the digits. */
-    fun number(value: Int): String = "$NUMERIC_INDICATOR$value"
+    /** UEB number: for a negative value, the minus sign comes BEFORE the numeric indicator (not after -- "$NUMERIC_INDICATOR$value" would put it in the wrong order, since value.toString() puts "-" first). */
+    fun number(value: Int): String {
+        val sign = if (value < 0) "-" else ""
+        return "$sign$NUMERIC_INDICATOR${kotlin.math.abs(value)}"
+    }
 
     /** Pixel buffer exactly [CELL_HEIGHT] tall and [widthOf] wide -- sized to its own footprint, safe to blit as-is. */
     fun render(text: String): Array<ByteArray> {

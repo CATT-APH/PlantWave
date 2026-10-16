@@ -44,14 +44,6 @@ android {
 }
 
 dependencies {
-    // Pinned to an exact version (was "latest.release") -- that dynamic
-    // version forces Gradle to re-check GitLab's package registry on every
-    // sync, and the deploy token authenticating that registry expired
-    // 2026-10-01, breaking Android Studio sync (401 Unauthorized) even
-    // though the artifact itself is already cached locally. Pinning avoids
-    // needing to contact GitLab for this dependency at all. Revert to
-    // latest.release once a fresh token is available, if picking up newer
-    // SDK releases becomes necessary. Same fix applied to Stocks.
     implementation("com.humanware:KeySoftSDK:0.1.136") //Needed for Monarch Development
     // hilt-android removed -- was never actually wired up (no Hilt Gradle
     // plugin applied, @HiltAndroidApp was inert, zero @Inject/@Module usage

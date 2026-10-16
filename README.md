@@ -2,7 +2,7 @@
 
 An app for the APH Monarch that draws a plant's electrical signal as a tactile graph, so blind and low-vision students can explore it by touch. Built for the Center for Assistive Technology Training Northwest (CATT-NW) at the Washington State School for the Blind.
 
-A note on the name: this project is called PlantWave because it grew out of work with the PlantWave plant-music device. This app does not read from that device. It reads the plant electrode signal directly through an Arduino. The project is not made by or affiliated with the makers of the PlantWave device. [Confirm this wording with CATT-NW.]
+A note on the name: this project is called PlantWave because it grew out of work with the PlantWave plant-music device. This app does not read from that device. It reads the plant electrode signal directly through an Arduino. The project is not made by or affiliated with the makers of the PlantWave device.
 
 ## What it does
 
@@ -21,13 +21,13 @@ Hardware:
 - A 1 megohm resistor
 - A breadboard and jumper wires
 - An Arduino Uno
-- A USB cable from the Arduino to the Monarch [add an adapter if the Monarch's port needs one]
+- A USB cable from the Arduino to the Monarch
 - An APH Monarch with developer access
 
 Software:
 - Arduino IDE
 - Android Studio
-- Access to the Monarch SDK through APH. Downloading it requires a deploy token. [Confirm with CATT-NW how much of this can be public.]
+- Access to the Monarch SDK through APH. You need an APH deploy token to build this app. It is not included here, and you must have one before you start.
 
 ## Wiring
 
@@ -36,16 +36,14 @@ Software:
 - Connect the sleeve pin on the breakout board to GND.
 - Plug the electrode cable into the breakout board.
 
-With nothing connected to the electrodes, A0 reads close to 1023. Touching the two electrode clips together pulls it close to 0. [Confirm this matches your board. Add a photo or diagram of the wiring with alt text that describes the connections.]
+With nothing connected to the electrodes, A0 reads close to 1023 (about 1015 to 1023).
 
 ## Setup
 
 1. Wire the circuit as described above.
 2. Open `arduino/plantwave/plantwave.ino` in the Arduino IDE and upload it to the Uno.
-3. On the Monarch, turn on developer options and USB debugging. [Add the steps from APH, if CATT-NW is okay with publishing them.]
-4. In the project's root folder, create a file named `keystore.properties` with this line, using the deploy token from APH:
-   `gitlab_maven_repo_deployToken=YOUR_TOKEN`
-   Never commit this file to GitHub.
+3. **Important: USB debugging must be turned on on the Monarch, or the app cannot be installed or run.** Turn on developer options, then USB debugging.
+4. In the project's root folder, copy `keystore.properties.example` to a new file named `keystore.properties`. Replace `YOUR_TOKEN_HERE` with your APH deploy token. You need to already have this token. Never commit this file to GitHub.
 5. Connect the Monarch to your computer by USB and accept the "Allow USB debugging?" prompt on the Monarch.
 6. From the project's root folder, build and install the app:
    - Windows: `gradlew.bat installDebug`
@@ -62,7 +60,7 @@ The app reads the data over USB using the open-source usb-serial-for-android lib
 
 ## Troubleshooting
 
-- If the reading stays at 1023 no matter what you do, the 3.5 mm plug is probably not making contact in the breakout board. Check that the plug fits the board and is pushed in all the way. A quick test: touch the two clip ends together. The reading should drop to a low number.
+- If the reading stays at 1023 no matter what you do, the 3.5 mm plug is probably not making contact in the breakout board. Check that the plug fits the board and is pushed in all the way. A quick test: touch the two electrode ends, one in each hand. The reading should drop.
 - If data starts arriving before you start a reading, the Arduino is still sampling from an earlier session. Stop the reading in the app or press the reset button on the Arduino.
 - If Gradle fails to download the Monarch SDK with a 401 error, check your deploy token. If the SDK has already been downloaded once, you can build with `gradlew.bat installDebug --offline`.
 - If Android Studio doesn't see the Monarch, check that USB debugging is still on. It can turn off after a firmware update. Unplug, plug back in, and accept the prompt again.
@@ -78,7 +76,7 @@ The app reads the data over USB using the open-source usb-serial-for-android lib
 
 ## Credits
 
-Built for CATT-NW at the Washington State School for the Blind, with the American Printing House for the Blind (APH). Thank you to Dr. Yue-Ting Siu, CATT-NW Coordinator, and Dr. Joshua Miele for their guidance and feedback. [Add anyone else you want to thank.]
+Built for CATT-NW at the Washington State School for the Blind, with the American Printing House for the Blind (APH). Thank you to Dr. Yue-Ting Siu, CATT-NW Coordinator, and Dr. Joshua Miele for their guidance and feedback.
 
 ## License
 
@@ -86,4 +84,4 @@ MIT License. See the LICENSE file.
 
 ## Contact
 
-CATT-NW: cattnw@wssb.wa.gov, 360-947-3288
+CATT-NW: cattnw@wssb.wa.gov

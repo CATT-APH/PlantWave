@@ -1,29 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-Maps physical Monarch controls to Android keycodes so they reach
-onKeyDown -- confirmed via the vendor's Command Summary doc + a working
-reference project (MonarchBlocks) that none of these keycodes are
-auto-forwarded; each needs its own entry here, or it never arrives.
+Maps physical Monarch controls to Android keycodes so they reach onKeyDown.
+None of these keycodes are auto-forwarded, so each needs its own entry here
+or it never arrives.
 
-- Enter: NOT a chassis button -- it's Dot 8 on the braille keyboard.
-  Confirmed on-device via adb logcat that omitting this entry means
-  KEYCODE_ENTER (66) never reaches onKeyDown at all. This is pause's real
-  working trigger (LiveGraphActivity.togglePause()).
+- Enter: not a chassis button. It is Dot 8 on the braille keyboard. Without
+  this entry KEYCODE_ENTER (66) never reaches onKeyDown. This is the pause
+  trigger (LiveGraphActivity.togglePause()).
 
-Zoom In/Out entries were REMOVED 2026-10-02: they're permanently claimed
-system-wide by the device's screen reader for its own braille
-line-spacing feature, in every app, and no commands.xml mapping --
-including the ones that used to be here -- can override that. The
-Live/Overview toggle they used to drive is now bound to D-pad Up/Down
-instead (see LiveGraphActivity's own doc comment). See
-monarch-sdk-known-issues memory for the full investigation.
+Zoom In/Out are reserved by the device's screen reader for braille line
+spacing and cannot be overridden by any mapping here. The Live/Overview
+toggle uses D-pad Up/Down instead (see LiveGraphActivity).
 
-D-pad center and Space are deliberately NOT mapped: the vendor's Command
-Summary never lists a D-pad center/select function (confirmed: this
-device's D-pad has no center push, matching what pressing it on the real
-unit shows), and no working reference project maps Space -- it's also a
-modifier prefix for many reserved shortcuts (see "Commands not to
-override.md"), so mapping it bare risks colliding with those.
+D-pad center and Space are deliberately not mapped. The D-pad has no center
+push on this device, and Space is a modifier prefix for reserved shortcuts,
+so mapping it bare risks colliding with them.
 
 PlantWaveApplication hands this file to KeySoft on launch.
 -->

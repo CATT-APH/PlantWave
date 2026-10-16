@@ -210,8 +210,8 @@ class PlantWaveActivity : AppCompatActivity() {
      * 66); confirmed via adb logcat on the graph screen that this was never
      * true without that mapping. D-pad center/Space are kept only as an
      * external-keyboard fallback -- this device's D-pad has no center
-     * position at all (confirmed against the vendor's own Command Summary),
-     * and Space isn't mapped in commands.xml on purpose (see that file).
+     * position at all, and Space isn't mapped in commands.xml on purpose
+     * (see that file).
      *
      * Debounced the same way as LiveGraphActivity: physical keys on this
      * hardware arrive on finger-lift with both onKeyDown and onKeyUp firing

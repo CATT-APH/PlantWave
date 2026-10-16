@@ -63,15 +63,9 @@ import kotlin.math.roundToInt
  * slower cadence, confirmed preferred over repainting every sample despite
  * reading as "paused" on first impression).
  *
- * Originally bound to the physical Zoom keys -- moved to D-pad Up/Down
- * 2026-10-02 after Stocks' far more rigorous key-testing established that
- * Zoom In/Out are permanently claimed system-wide by the device's screen
- * reader for braille line spacing, in every app, with no way for any
- * commands.xml mapping to override it. What looked like "zoom works" here
- * earlier was almost certainly that same system magnification effect
- * reshaping the graph's appearance, not this toggle actually firing -- see
- * monarch-sdk-known-issues memory. D-pad Up/Down are the one input
- * confirmed reliable on this hardware across both Monarch apps.
+ * Bound to D-pad Up/Down. The Zoom keys are reserved by the device's screen
+ * reader and never reach the app, so they are not used. D-pad Up/Down are
+ * the reliable input on this hardware.
  *
  * Enter (Dot 8) toggles pause: a view-layer freeze. LiveSession keeps
  * accumulating regardless. A double-tap while paused speaks the value as it
@@ -196,21 +190,17 @@ class LiveGraphActivity : AppCompatActivity() {
 
     /**
      * Pause's real trigger is Enter (Dot 8 on the braille keyboard, mapped in
-     * commands.xml) -- confirmed via adb logcat that it never reached here at
-     * all before that mapping existed. D-pad center and Space are kept only
-     * as a fallback for an external keyboard: the vendor's own Command
-     * Summary confirms this device's D-pad has no center/select position (no
-     * commands.xml key token exists for it either), and Space has no
-     * confirmed mapping in any reference project -- it's also a modifier
-     * prefix for reserved shortcuts, so it isn't mapped here on purpose.
+     * commands.xml). It never reaches here without that mapping. D-pad center
+     * and Space are kept only as a fallback for an external keyboard. This
+     * device's D-pad has no center position, and Space is not mapped in
+     * commands.xml on purpose.
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         Log.d(TAG, "onKeyDown keyCode=$keyCode repeat=${event?.repeatCount} aidlBound=${manager.aidlBound} firstRenderDone=$firstRenderDone")
         when (keyCode) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_SPACE -> debounced { togglePause() }
-            // D-pad Up/Down, not Zoom -- Zoom is permanently claimed system-wide
-            // for braille line spacing and never reaches onKeyDown (confirmed via
-            // Stocks' key testing). D-pad Up/Down are proven reliable instead.
+            // D-pad Up/Down, not Zoom -- Zoom is reserved by the screen reader and
+            // never reaches onKeyDown.
             KeyEvent.KEYCODE_DPAD_UP -> debounced { setOverview(false) }
             KeyEvent.KEYCODE_DPAD_DOWN -> debounced { setOverview(true) }
             else -> return super.onKeyDown(keyCode, event)
